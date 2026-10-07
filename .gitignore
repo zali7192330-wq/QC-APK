@@ -1,0 +1,24 @@
+# Gradle / Android
+.gradle/
+build/
+**/build/
+local.properties
+
+# Notion config with your token (see config.master.example.json)
+config.master.json
+
+# .NET MAUI
+**/bin/
+**/obj/
+maui/Secrets.cs
+
+# Binaries
+*.apk
+*.aab
+*.zip
+
+# IDE / OS
+.idea/
+*.iml
+.vscode/
+.DS_Store
