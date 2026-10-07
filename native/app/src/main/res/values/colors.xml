@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bg">#121212</color>
+    <color name="surface">#1E1E1E</color>
+    <color name="input_bg">#242424</color>
+    <color name="text_primary">#EDEDED</color>
+    <color name="text_hint">#8A8A8A</color>
+    <color name="text_muted">#9A9A9A</color>
+    <color name="accent">#2DD4BF</color>
+    <color name="accent_dark">#0E9488</color>
+
+    <!-- modifier highlight colors (mirror the Windows app) -->
+    <color name="mod_priority">#FF6B6B</color>
+    <color name="mod_list">#8B8BF5</color>
+    <color name="mod_tag">#C586E0</color>
+    <color name="mod_category">#FFC94D</color>
+    <color name="mod_date">#6BB8FF</color>
+
+    <color name="chip_bg">#2A2A2A</color>
+    <color name="danger">#FF6B6B</color>
+</resources>

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">QuickCapture</string>
+    <string name="hint_input">Type it…  #1  ~Career  !Spark  tomorrow</string>
+    <string name="label_preview">Preview</string>
+    <string name="action_attach">Attach</string>
+    <string name="action_save">Save</string>
+    <string name="action_clear">Clear</string>
+    <string name="label_attachments">Attachments</string>
+    <string name="title_list_picker">Topic list</string>
+    <string name="title_category_picker">Category</string>
+    <string name="msg_nothing">Nothing to save</string>
+</resources>

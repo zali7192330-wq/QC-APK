@@ -1,0 +1,64 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+// Pre-filled Notion credentials, read at build time from a master config
+// JSON file. Values are baked into BuildConfig and never printed.
+// The file is located via (in order):
+//   1. -PnotionConfig=/path/to/config.json Gradle property
+//   2. config.master.json in the project root (see config.master.example.json)
+//   3. The original absolute path (sandbox default)
+def configPath = project.findProperty('notionConfig')
+    ?: "${rootDir}/config.master.json"
+def masterFile = new File(configPath)
+if (!masterFile.exists()) {
+    masterFile = new File('/home/hatch/workspace/quickcapture-v2/config.master.json')
+}
+if (!masterFile.exists()) {
+    throw new GradleException(
+        "Missing Notion config. Copy config.master.example.json to config.master.json " +
+        "and fill in your Notion token, or pass -PnotionConfig=/path/to/config.json")
+}
+def masterText = masterFile.text.replaceAll(/(?m)^\s*\/\/.*$/, '')
+def master = new groovy.json.JsonSlurper().parseText(masterText)
+def esc = { s -> s.replace('\\', '\\\\').replace('"', '\\"').replace('$', '\\$') }
+
+android {
+    namespace 'com.quickcapture.app'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.quickcapture.app'
+        minSdk 26
+        targetSdk 34
+        versionCode 1
+        versionName '1.0'
+        buildConfigField 'String', 'NOTION_TOKEN', "\"${esc(master.NotionToken.toString())}\""
+        buildConfigField 'String', 'NOTION_DATABASE_ID', "\"${esc(master.DatabaseId.toString())}\""
+    }
+
+    buildTypes {
+        debug {
+        }
+        release {
+            minifyEnabled false
+        }
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+}
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+}

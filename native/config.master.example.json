@@ -1,0 +1,14 @@
+{
+  // Your Notion integration token (keep this file private — it is git-ignored).
+  // Copy this file to config.master.json and fill in your values.
+  "NotionToken": "PASTE_YOUR_TOKEN_HERE",
+
+  // Your Notion database ("DB-Quick Capture").
+  "DatabaseId": "PASTE_YOUR_DATABASE_ID_HERE",
+
+  // Lists offered in the ~list popup
+  "Lists": [ "Inbox", "Education", "Career", "Fitness", "Health", "Personal" ],
+
+  // Categories offered in the !category popup
+  "Categories": [ "Spark", "TIL", "Prompt" ]
+}
