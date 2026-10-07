@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="QuickCaptureMaui.MainPage"
+             BackgroundColor="#121212"
+             Title="Quick Capture">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="16" Spacing="12">
+
+            <Label Text="⚡ Quick Capture"
+                   FontSize="22" FontAttributes="Bold" TextColor="#2DD4BF" />
+
+            <Editor x:Name="InputEditor"
+                    Placeholder="Type your note…  (#1  ~Career  !Spark)"
+                    PlaceholderColor="#757575"
+                    TextColor="#F5F5F5" BackgroundColor="#1E1E1E"
+                    AutoSize="TextChanges" MinimumHeightRequest="120"
+                    TextChanged="OnInputChanged" />
+
+            <Frame BackgroundColor="#1E1E1E" BorderColor="#333333" Padding="10"
+                   IsVisible="False" x:Name="PreviewFrame">
+                <Label x:Name="PreviewLabel" FontSize="14" />
+            </Frame>
+
+            <HorizontalStackLayout Spacing="8" x:Name="ChipRow" IsVisible="False">
+                <Frame x:Name="PriorityChip" Padding="8,4" BackgroundColor="#3A1F1F"
+                       BorderColor="#E57373" IsVisible="False">
+                    <Label x:Name="PriorityChipLabel" TextColor="#E57373" FontSize="12" FontAttributes="Bold" />
+                </Frame>
+                <Frame x:Name="TopicChip" Padding="8,4" BackgroundColor="#232338"
+                       BorderColor="#9FA8DA" IsVisible="False">
+                    <Label x:Name="TopicChipLabel" TextColor="#9FA8DA" FontSize="12" FontAttributes="Bold" />
+                </Frame>
+                <Frame x:Name="CategoryChip" Padding="8,4" BackgroundColor="#3A2F14"
+                       BorderColor="#FFD54F" IsVisible="False">
+                    <Label x:Name="CategoryChipLabel" TextColor="#FFD54F" FontSize="12" FontAttributes="Bold" />
+                </Frame>
+                <Frame x:Name="DateChip" Padding="8,4" BackgroundColor="#1B2A3A"
+                       BorderColor="#90CAF9" IsVisible="False">
+                    <Label x:Name="DateChipLabel" TextColor="#90CAF9" FontSize="12" FontAttributes="Bold" />
+                </Frame>
+            </HorizontalStackLayout>
+
+            <HorizontalStackLayout Spacing="8">
+                <Button Text="~ List" Clicked="OnPickList"
+                        BackgroundColor="#2A2A2A" TextColor="#9FA8DA" />
+                <Button Text="! Category" Clicked="OnPickCategory"
+                        BackgroundColor="#2A2A2A" TextColor="#FFD54F" />
+                <Button Text="📎 Attach" Clicked="OnAttach"
+                        BackgroundColor="#2A2A2A" TextColor="#F5F5F5" />
+            </HorizontalStackLayout>
+
+            <VerticalStackLayout x:Name="AttachmentList" Spacing="6" />
+
+            <Button Text="➤  Save to Notion" Clicked="OnSave"
+                    x:Name="SaveButton"
+                    BackgroundColor="#2DD4BF" TextColor="#121212"
+                    FontAttributes="Bold" HeightRequest="52" />
+
+            <Label x:Name="StatusLabel" TextColor="#9E9E9E" FontSize="12" />
+
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>
