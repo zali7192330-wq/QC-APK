@@ -146,13 +146,18 @@ public class NotionClient
             if (reminder.HasValue)
                 props["Date"] = new { date = new { start = reminder.Value.ToString("o") } };
             if (!string.IsNullOrWhiteSpace(topic))
-                props["Topic"] = new
-                {
-                    rich_text = new[]
-                    {
-                        new { type = "text", text = new { content = topic.Length > 2000 ? topic[..2000] : topic } }
-                    }
-                };
+            {
+                // The database Topic property is a multi_select: split the
+                // comma-joined topic string ("Career, work") into options.
+                // Option names cannot contain commas and max out at 100 chars.
+                var topicOptions = topic.Split(',')
+                    .Select(t => t.Trim())
+                    .Where(t => t.Length > 0)
+                    .Select(t => new { name = t.Length > 100 ? t[..100] : t })
+                    .ToArray();
+                if (topicOptions.Length > 0)
+                    props["Topic"] = new { multi_select = topicOptions };
+            }
             if (!string.IsNullOrWhiteSpace(priority))
                 props["Priority"] = new { select = new { name = priority } };
             if (!string.IsNullOrWhiteSpace(category))

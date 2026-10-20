@@ -102,7 +102,9 @@ object NotionClient {
                 JSONObject().put("text", JSONObject().put("content", title)))))
             props.put("Captured", JSONObject().put("date", JSONObject()
                 .put("start", now.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME))))
-            props.put("Source", JSONObject().put("select", JSONObject().put("name", "Quick Capture")))
+            // Captures from the mobile app are tagged QC-MOBILE (the Windows
+            // app and imports use their own Source values).
+            props.put("Source", JSONObject().put("select", JSONObject().put("name", "QC-MOBILE")))
             props.put("Note", JSONObject().put("rich_text", JSONArray().put(
                 JSONObject().put("type", "text")
                     .put("text", JSONObject().put("content", firstLine(text, 2000))))))
@@ -111,9 +113,20 @@ object NotionClient {
                     .put("start", reminder.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME))))
             }
             if (!topic.isNullOrBlank()) {
-                val t = if (topic.length > 2000) topic.substring(0, 2000) else topic
-                props.put("Topic", JSONObject().put("rich_text", JSONArray().put(
-                    JSONObject().put("type", "text").put("text", JSONObject().put("content", t)))))
+                // The database Topic property is a multi_select: split the
+                // comma-joined topic string ("Career, work") into options.
+                // Option names cannot contain commas and max out at 100 chars.
+                val options = JSONArray()
+                topic.split(",").forEach { part ->
+                    val name = part.trim()
+                    if (name.isNotEmpty()) {
+                        options.put(JSONObject().put("name",
+                            if (name.length > 100) name.substring(0, 100) else name))
+                    }
+                }
+                if (options.length() > 0) {
+                    props.put("Topic", JSONObject().put("multi_select", options))
+                }
             }
             if (!priority.isNullOrBlank()) {
                 props.put("Priority", JSONObject().put("select", JSONObject().put("name", priority)))
@@ -211,7 +224,13 @@ object NotionClient {
         "md" -> "text/markdown"
         "zip" -> "application/zip"
         "mp4" -> "video/mp4"
+        "mov" -> "video/quicktime"
         "mp3" -> "audio/mpeg"
+        "m4a" -> "audio/mp4"
+        "aac" -> "audio/aac"
+        "3gp" -> "audio/3gpp"
+        "wav" -> "audio/wav"
+        "ogg" -> "audio/ogg"
         else -> "application/octet-stream"
     }
 

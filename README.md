@@ -27,6 +27,16 @@ Both are debug builds: on install, allow "unknown sources" when Android asks.
 - Saves to Notion via HTTPS POST (Name, Note, Priority, Topic, Category,
   Date, Source = Quick Capture; images first, then files, then text)
 
+Native-only extras (v3/v4):
+
+- **Source = QC-MOBILE** — mobile captures are tagged separately in Notion
+- **Paste button** — a copied image becomes an attachment (copied text
+  pastes at the cursor)
+- **Attach menu** — Camera photo, Camera video, Photos, Videos, Files
+  (camera capture goes through a FileProvider in `res/xml/file_paths.xml`)
+- **Voice recording** — Record button captures an .m4a voice note as an
+  attachment (needs the RECORD_AUDIO permission)
+
 ## Setup
 
 **Native** (`native/`):
@@ -53,3 +63,14 @@ Both are debug builds: on install, allow "unknown sources" when Android asks.
   `app/src/main/res/drawable/ic_launcher.xml` — no binary assets needed.
 - The Windows `.ico` icon is not committed (too large for the API push);
   `src/Assets/icon.png` is included.
+
+## Version history
+
+- **native v4** — attach menu (Camera photo/video, Photos, Videos, Files)
+  via FileProvider; in-app voice recording (.m4a attachments)
+- **native v3** — Source = QC-MOBILE; clipboard image paste (Paste button).
+  First v3 build was missing versionCode and would not install; the fixed
+  rebuild sets versionCode 3 / versionName 3.0
+- **v2 (both)** — Topic sent as a Notion multi_select (database column was
+  converted from rich text; v1 saves failed with a 400 error)
+- **v1 (both)** — first builds: modifiers, attachments, share intent

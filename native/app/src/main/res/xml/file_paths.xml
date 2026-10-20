@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Shares the app's cache "captures" folder with the camera app so photos
+     and videos taken from QuickCapture land there as attachments. -->
+<paths>
+    <cache-path name="captures" path="captures/" />
+</paths>

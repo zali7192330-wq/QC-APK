@@ -1,9 +1,17 @@
 package com.quickcapture.app
 
+import android.Manifest
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.database.Cursor
+import android.media.MediaRecorder
 import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.os.SystemClock
 import android.provider.OpenableColumns
 import android.text.Editable
 import android.text.Spannable
@@ -17,11 +25,15 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
@@ -38,6 +50,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var chipDate: TextView
     private lateinit var attachmentsRow: LinearLayout
     private lateinit var saveButton: Button
+    private lateinit var recordButton: Button
 
     private val attachments = mutableListOf<CaptureAttachment>()
     private var suppressWatcher = false
@@ -51,6 +64,52 @@ class MainActivity : AppCompatActivity() {
             uris.forEach { addAttachment(it) }
         }
 
+    private val pickPhotos =
+        registerForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(10)) { uris ->
+            uris.forEach { addAttachment(it) }
+        }
+
+    private val pickVideos =
+        registerForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(10)) { uris ->
+            uris.forEach { addAttachment(it) }
+        }
+
+    // Camera results: the photo/video lands in the pending file we handed to
+    // the camera app through FileProvider.
+    private var pendingCameraFile: File? = null
+    private var pendingCameraIsImage: Boolean = true
+
+    private val takePicture =
+        registerForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
+            onCameraResult(ok)
+        }
+
+    private val captureVideo =
+        registerForActivityResult(ActivityResultContracts.CaptureVideo()) { ok ->
+            onCameraResult(ok)
+        }
+
+    private val requestMicPermission =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) startRecording()
+            else Toast.makeText(this, getString(R.string.msg_mic_denied), Toast.LENGTH_SHORT).show()
+        }
+
+    // Voice recording state
+    private var recorder: MediaRecorder? = null
+    private var recordingFile: File? = null
+    private var recordStartMs: Long = 0L
+    private val recordHandler = Handler(Looper.getMainLooper())
+    private val recordTicker = object : Runnable {
+        override fun run() {
+            if (recorder != null) {
+                val secs = (SystemClock.elapsedRealtime() - recordStartMs) / 1000
+                recordButton.text = "⏹ %d:%02d".format(secs / 60, secs % 60)
+                recordHandler.postDelayed(this, 500)
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -63,6 +122,7 @@ class MainActivity : AppCompatActivity() {
         chipDate = findViewById(R.id.chipDate)
         attachmentsRow = findViewById(R.id.attachmentsRow)
         saveButton = findViewById(R.id.saveButton)
+        recordButton = findViewById(R.id.recordButton)
 
         input.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
@@ -81,9 +141,9 @@ class MainActivity : AppCompatActivity() {
             }
         })
 
-        findViewById<Button>(R.id.attachButton).setOnClickListener {
-            pickFiles.launch(arrayOf("*/*"))
-        }
+        findViewById<Button>(R.id.pasteButton).setOnClickListener { pasteFromClipboard() }
+        findViewById<Button>(R.id.attachButton).setOnClickListener { showAttachMenu() }
+        recordButton.setOnClickListener { toggleRecording() }
         findViewById<Button>(R.id.clearButton).setOnClickListener { clearAll() }
         saveButton.setOnClickListener { save() }
 
@@ -217,7 +277,15 @@ class MainActivity : AppCompatActivity() {
             cursor?.close()
         }
 
-        val safeName = displayName.replace(Regex("[^A-Za-z0-9._-]"), "_")
+        var safeName = displayName.replace(Regex("[^A-Za-z0-9._-]"), "_")
+        // Clipboard images often arrive without a file extension; add one from
+        // the mime type so the upload carries the right content type.
+        if (!safeName.contains('.')) {
+            extensionForMime(mime)?.let { ext ->
+                displayName = "$displayName.$ext"
+                safeName = "$safeName.$ext"
+            }
+        }
         val tmp = File(cacheDir, "qc_${System.currentTimeMillis()}_$safeName")
         try {
             contentResolver.openInputStream(uri)?.use { ins ->
@@ -232,9 +300,22 @@ class MainActivity : AppCompatActivity() {
         }
 
         val isImage = (mime ?: guessMime(safeName)).startsWith("image/")
-        val att = CaptureAttachment(displayName, tmp, isImage)
+        registerAttachment(CaptureAttachment(displayName, tmp, isImage))
+    }
+
+    private fun registerAttachment(att: CaptureAttachment) {
         attachments.add(att)
         attachmentsRow.addView(makeAttachmentChip(att))
+    }
+
+    private fun extensionForMime(mime: String?): String? = when (mime) {
+        "image/png" -> "png"
+        "image/jpeg" -> "jpg"
+        "image/gif" -> "gif"
+        "image/webp" -> "webp"
+        "image/bmp" -> "bmp"
+        "application/pdf" -> "pdf"
+        else -> null
     }
 
     private fun guessMime(name: String): String {
@@ -286,6 +367,196 @@ class MainActivity : AppCompatActivity() {
         attachments.forEach { runCatching { it.file.delete() } }
         attachments.clear()
         attachmentsRow.removeAllViews()
+    }
+
+    // ---- attach menu: camera / photos / videos / files ---------------------
+
+    private fun showAttachMenu() {
+        val items = arrayOf(
+            getString(R.string.menu_camera_photo),
+            getString(R.string.menu_camera_video),
+            getString(R.string.menu_photos),
+            getString(R.string.menu_videos),
+            getString(R.string.menu_files)
+        )
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.title_attach_menu))
+            .setItems(items) { _, which ->
+                when (which) {
+                    0 -> launchCamera(image = true)
+                    1 -> launchCamera(image = false)
+                    2 -> pickPhotos.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                    )
+                    3 -> pickVideos.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)
+                    )
+                    4 -> pickFiles.launch(arrayOf("*/*"))
+                }
+            }
+            .show()
+    }
+
+    private fun launchCamera(image: Boolean) {
+        try {
+            val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+            val dir = File(cacheDir, "captures").apply { mkdirs() }
+            val file = if (image) File(dir, "IMG_$stamp.jpg") else File(dir, "VID_$stamp.mp4")
+            pendingCameraFile = file
+            pendingCameraIsImage = image
+            val uri = FileProvider.getUriForFile(this, "com.quickcapture.app.fileprovider", file)
+            if (image) takePicture.launch(uri) else captureVideo.launch(uri)
+        } catch (e: Exception) {
+            pendingCameraFile = null
+            Toast.makeText(this, getString(R.string.msg_camera_failed), Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun onCameraResult(ok: Boolean) {
+        val file = pendingCameraFile
+        pendingCameraFile = null
+        if (file == null) return
+        if (ok && file.exists() && file.length() > 0) {
+            registerAttachment(CaptureAttachment(file.name, file, pendingCameraIsImage))
+        } else {
+            runCatching { file.delete() }
+            if (!ok) return // user cancelled the camera — stay quiet
+            Toast.makeText(this, getString(R.string.msg_camera_failed), Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // ---- voice recording -----------------------------------------------------
+
+    private fun toggleRecording() {
+        if (recorder != null) {
+            stopRecording()
+            return
+        }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            requestMicPermission.launch(Manifest.permission.RECORD_AUDIO)
+        } else {
+            startRecording()
+        }
+    }
+
+    @Suppress("DEPRECATION") // no-arg MediaRecorder keeps minSdk 26 support
+    private fun startRecording() {
+        try {
+            val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+            val dir = File(cacheDir, "recordings").apply { mkdirs() }
+            val file = File(dir, "Voice note $stamp.m4a")
+            val rec = MediaRecorder()
+            rec.setAudioSource(MediaRecorder.AudioSource.MIC)
+            rec.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+            rec.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+            rec.setAudioEncodingBitRate(128_000)
+            rec.setAudioSamplingRate(44_100)
+            rec.setOutputFile(file.absolutePath)
+            rec.prepare()
+            rec.start()
+            recorder = rec
+            recordingFile = file
+            recordStartMs = SystemClock.elapsedRealtime()
+            recordButton.text = "⏹ 0:00"
+            recordHandler.postDelayed(recordTicker, 500)
+        } catch (e: Exception) {
+            recorder = null
+            recordingFile = null
+            Toast.makeText(this, getString(R.string.msg_recording_failed), Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun stopRecording() {
+        val rec = recorder ?: return
+        val file = recordingFile
+        recorder = null
+        recordingFile = null
+        recordHandler.removeCallbacks(recordTicker)
+        recordButton.text = getString(R.string.action_record)
+        val elapsedMs = SystemClock.elapsedRealtime() - recordStartMs
+        try {
+            rec.stop()
+        } catch (e: RuntimeException) {
+            // stopping almost immediately throws — treat as too short
+            runCatching { file?.delete() }
+            Toast.makeText(this, getString(R.string.msg_recording_too_short), Toast.LENGTH_SHORT).show()
+            runCatching { rec.release() }
+            return
+        }
+        runCatching { rec.release() }
+        if (file != null && file.exists() && file.length() > 0 && elapsedMs >= 600) {
+            registerAttachment(CaptureAttachment(file.name, file, isImage = false))
+        } else {
+            runCatching { file?.delete() }
+            Toast.makeText(this, getString(R.string.msg_recording_too_short), Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    override fun onDestroy() {
+        // Never leave the mic hot or a recorder dangling if the app is closed.
+        recordHandler.removeCallbacks(recordTicker)
+        recorder?.let { rec ->
+            runCatching { rec.stop() }
+            runCatching { rec.release() }
+        }
+        recorder = null
+        super.onDestroy()
+    }
+
+    // ---- clipboard paste ---------------------------------------------------
+
+    /**
+     * Paste button: an image copied from any app (gallery, browser, chat…)
+     * becomes an attachment; clipboard text is inserted at the cursor.
+     */
+    private fun pasteFromClipboard() {
+        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        val clip = clipboard.primaryClip
+        if (clip == null || clip.itemCount == 0) {
+            Toast.makeText(this, getString(R.string.msg_clipboard_empty), Toast.LENGTH_SHORT).show()
+            return
+        }
+        val clipHasImage = (0 until clip.description.mimeTypeCount).any {
+            clip.description.getMimeType(it).startsWith("image/")
+        }
+        var addedImage = false
+        var pastedText = false
+        for (i in 0 until clip.itemCount) {
+            val item = clip.getItemAt(i)
+            val uri = item.uri
+            if (uri != null) {
+                val type = runCatching { contentResolver.getType(uri) }.getOrNull()
+                if (type?.startsWith("image/") == true || (type == null && clipHasImage)) {
+                    val before = attachments.size
+                    addAttachment(uri)
+                    if (attachments.size > before) {
+                        addedImage = true
+                        continue
+                    }
+                }
+            }
+            if (!addedImage) {
+                val text = runCatching { item.coerceToText(this)?.toString() }.getOrNull()
+                if (!text.isNullOrEmpty()) {
+                    insertTextAtCursor(text)
+                    pastedText = true
+                }
+            }
+        }
+        when {
+            addedImage ->
+                Toast.makeText(this, getString(R.string.msg_pasted_image), Toast.LENGTH_SHORT).show()
+            !pastedText ->
+                Toast.makeText(this, getString(R.string.msg_clipboard_no_image), Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun insertTextAtCursor(text: String) {
+        val start = input.selectionStart.coerceAtLeast(0)
+        val end = input.selectionEnd.coerceAtLeast(start)
+        input.text.replace(start, end, text)
     }
 
     // ---- save --------------------------------------------------------------
